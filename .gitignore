@@ -1,0 +1,55 @@
+
+# -------- Python 编译产物 --------
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+
+# -------- 虚拟环境 --------
+venv/
+env/
+.venv/
+.conda/
+
+# -------- IDE 与编辑器 --------
+.vscode/
+.idea/
+*.sublime-*
+*.swp
+*.swo
+*~
+
+# -------- Jupyter Notebook --------
+.ipynb_checkpoints/
+*.ipynb
+
+# -------- 训练产物 --------
+# SB3 训练日志（TensorBoard 格式，体积可能很大）
+logs/
+tensorboard_logs/
+# 训练好的模型文件（.zip 是 SB3 默认格式）
+models/
+*.zip
+
+# -------- 系统文件 --------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -------- 环境变量与密钥 --------
+.env
+.env.local
+
+# -------- pytest / 测试 --------
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# -------- 测试文件 --------
+tests/test.py
+
+
