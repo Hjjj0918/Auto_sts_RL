@@ -27,6 +27,6 @@
 ## [0.1.0] - 2026-07-08
 
 ### Added
-- 项目初始化，MIT 许可证
+- 项目初始化，GNU GPL v3 许可证
 - 环境验证脚本 `verify_env.py`
 - `.gitignore`、`README.md`、`CHANGELOG.md`
