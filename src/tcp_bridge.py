@@ -2,7 +2,7 @@
 TCP bridge: Communication Mod (stdin/stdout) <-> RL agent (TCP client).
 
 Protocol:
-  - Game -> bridge (stdin):  JSON game state (one line)
+  - Game -> bridge (stdin):  JSON game state (one line, can be very long)
   - Bridge -> game (stdout): plain-text command (e.g. "end", "play 0")
   - Bridge <-> client (TCP): JSON (both directions), newline-delimited
 
@@ -14,6 +14,7 @@ import json
 import socket
 import threading
 import argparse
+import traceback
 
 
 class TCPBridge:
@@ -43,16 +44,13 @@ class TCPBridge:
         threading.Thread(target=accept, daemon=True).start()
 
     def send_to_client(self, state: dict) -> str | None:
-        """Send game state to RL client, return plain-text command."""
         with self.lock:
             if self.client_sock is None:
                 return None
             try:
-                # Forward game state as JSON.
                 msg = json.dumps(state, ensure_ascii=False) + "\n"
                 self.client_sock.sendall(msg.encode("utf-8"))
 
-                # Wait for plain-text command from client.
                 buf = b""
                 while b"\n" not in buf:
                     chunk = self.client_sock.recv(65536)
@@ -74,28 +72,36 @@ class TCPBridge:
     def run(self):
         self.start_server()
 
-        # Handshake: game expects the first message as plain text.
-        # Any non-empty message signals readiness.
+        # Handshake: the game waits for the first message before sending state.
         print("ready", flush=True)
-        print("[bridge] Handshake sent, waiting for game state...", file=sys.stderr)
+        print("[bridge] Handshake sent", file=sys.stderr)
 
         msg_count = 0
         for line in sys.stdin:
+            msg_count += 1
             line = line.strip()
             if not line:
                 continue
 
-            msg_count += 1
             try:
                 state = json.loads(line)
             except json.JSONDecodeError:
-                print(f"[bridge] Msg #{msg_count}: invalid JSON (first 120 chars):",
+                print(f"[bridge] Msg #{msg_count}: invalid JSON, len={len(line)}",
                       file=sys.stderr)
-                print(f"  {line[:120]}", file=sys.stderr)
+                print(f"  first 200 chars: {line[:200]}", file=sys.stderr)
                 continue
 
-            print(f"[bridge] Msg #{msg_count}: state ({len(state)} keys)",
-                  file=sys.stderr)
+            if isinstance(state, dict):
+                ks = len(state)
+                # Log one-line summary: available commands + game state keys
+                cmds = state.get("available_commands", [])
+                gs = state.get("game_state", {})
+                print(f"[bridge] Msg #{msg_count}: {ks} keys, "
+                      f"cmds={cmds}, "
+                      f"gs_keys={list(gs.keys())[:10] if isinstance(gs, dict) else '?'}",
+                      file=sys.stderr)
+            else:
+                print(f"[bridge] Msg #{msg_count}: non-dict state", file=sys.stderr)
 
             cmd = self.send_to_client(state)
             if cmd is None:
@@ -105,8 +111,12 @@ class TCPBridge:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=9339)
-    args = parser.parse_args()
-    bridge = TCPBridge(port=args.port)
-    bridge.run()
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--port", type=int, default=9339)
+        args = parser.parse_args()
+        bridge = TCPBridge(port=args.port)
+        bridge.run()
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
