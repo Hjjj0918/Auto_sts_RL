@@ -14,7 +14,6 @@ import json
 import socket
 import threading
 import argparse
-import traceback
 
 
 class TCPBridge:

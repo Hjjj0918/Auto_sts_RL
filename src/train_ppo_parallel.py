@@ -1,9 +1,12 @@
 """
 Train PPO on MiniStsEnv with 16 parallel environments.
 
-Usage: python train_ppo_parallel.py
-This should fully utilize the 16-core CPU and finish training faster.
+Usage: python train_ppo_parallel.py   (run from project root: python src/train_ppo_parallel.py)
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor

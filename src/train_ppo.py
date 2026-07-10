@@ -1,9 +1,13 @@
 """
 Train a PPO agent on MiniStsEnv.
 
-Usage: python train_ppo.py
-Output: models/mini_sts_ppo.zip — the trained model file
+Usage: python train_ppo.py   (run from project root: python src/train_ppo.py)
+Output: models/mini_sts_ppo.zip
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.monitor import Monitor
