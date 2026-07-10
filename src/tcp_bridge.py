@@ -5,6 +5,7 @@ import socket
 import threading
 import argparse
 import traceback
+import time as _time
 
 
 class TCPBridge:
@@ -17,12 +18,8 @@ class TCPBridge:
 
     def start_server(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-        try:
-            server.bind((self.host, self.port))
-        except OSError:
-            print("[bridge] Port in use, exiting.", file=sys.stderr)
-            sys.exit(0)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((self.host, self.port))
         server.listen(1)
         print(f"[bridge] TCP on {self.host}:{self.port}", file=sys.stderr)
 
@@ -64,7 +61,7 @@ class TCPBridge:
 
     def _is_combat(self, state):
         cmds = state.get("available_commands", [])
-        return "end" in cmds or "play" in cmds
+        return "end" in cmds or "play" in cmds or "choose" in cmds
 
     def run(self):
         self.start_server()
@@ -81,14 +78,11 @@ class TCPBridge:
                 self.client_ready.wait()
                 cmd = self.send_to_client(state)
                 if cmd is None:
-                    self.client_ready.clear()
-                    self.client_ready.wait()
-                    cmd = self.send_to_client(state)
-                    if cmd is None:
-                        cmd = "end"
+                    cmd = "state"  # wait, don't end turn
             else:
                 cmd = "state"
             print(cmd, flush=True)
+            _time.sleep(0.03)
 
 
 if __name__ == "__main__":
