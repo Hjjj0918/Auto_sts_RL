@@ -42,6 +42,7 @@ desktop.ini
 # -------- 环境变量与密钥 --------
 .env
 .env.local
+config/
 
 # -------- pytest / 测试 --------
 .pytest_cache/

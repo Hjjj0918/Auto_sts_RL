@@ -5,34 +5,44 @@ Reads game state via TCP bridge, formats it as a prompt, sends to an
 OpenAI-compatible API (DeepSeek, OpenAI, etc.), parses the response
 into a game command.
 
-Usage:
-  set DEEPSEEK_API_KEY=your_key_here
-  python src/llm_agent.py
+Setup:
+  1. Copy config/.env.example to config/.env
+  2. Fill in your API key
+  3. python src/llm_agent.py
 """
 import socket
 import json
 import os
 import sys
 import re
+from pathlib import Path
 from openai import OpenAI
 
 # ---------------------------------------------------------------------------
-# Config
+# Config — reads from config/.env (not tracked by git)
 # ---------------------------------------------------------------------------
 HOST = "127.0.0.1"
 PORT = 9339
 
+# Load .env file if python-dotenv is available, otherwise fall back to env vars.
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parent.parent / "config" / ".env"  # gitignored
+    load_dotenv(_env_path)
+except ImportError:
+    pass
+
 API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 if not API_KEY:
-    print("Set DEEPSEEK_API_KEY environment variable.", file=sys.stderr)
+    print("Set DEEPSEEK_API_KEY in config/.env", file=sys.stderr)
     sys.exit(1)
+
+MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 
 client = OpenAI(
     api_key=API_KEY,
-    base_url="https://api.deepseek.com",  # DeepSeek OpenAI-compatible endpoint
-)
-
-MODEL = "deepseek-chat"  # or "deepseek-reasoner" for deep thinking
+    base_url="https://api.deepseek.com",
+)  
 
 SYSTEM_PROMPT = """\
 You are playing Slay the Spire. You control the player's actions in combat.
