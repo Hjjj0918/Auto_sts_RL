@@ -1,94 +1,96 @@
-"""TCP bridge: Communication Mod (stdin/stdout) <-> RL agent (TCP client)."""
+"""TCP bridge: Communication Mod <-> RL agent."""
 import sys
 import json
 import socket
 import threading
-import argparse
 import traceback
-import time as _time
 
 
-class TCPBridge:
-    def __init__(self, host="127.0.0.1", port=9339):
-        self.host = host
-        self.port = port
-        self.client_sock = None
-        self.lock = threading.Lock()
-        self.client_ready = threading.Event()
+HOST = "127.0.0.1"
+PORT = 9339
+client_sock = None
+lock = threading.Lock()
 
-    def start_server(self):
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((self.host, self.port))
-        server.listen(1)
-        print(f"[bridge] TCP on {self.host}:{self.port}", file=sys.stderr)
 
-        def accept():
+def accept_client():
+    global client_sock
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        server.bind((HOST, PORT))
+    except OSError:
+        print(f"[bridge] port {PORT} in use, another instance running.", file=sys.stderr)
+        return  # exit thread silently
+    server.listen(1)
+    print(f"[bridge] listening on {HOST}:{PORT}", file=sys.stderr)
+    while True:
+        try:
+            sock, addr = server.accept()
+            print(f"[bridge] client {addr}", file=sys.stderr)
+            with lock:
+                if client_sock:
+                    try:
+                        client_sock.close()
+                    except Exception:
+                        pass
+                client_sock = sock
+        except Exception as e:
+            print(f"[bridge] accept: {e}", file=sys.stderr)
+
+
+def forward(state):
+    global client_sock
+    with lock:
+        if client_sock is None:
+            return None
+        try:
+            msg = json.dumps(state, ensure_ascii=False) + "\n"
+            client_sock.sendall(msg.encode("utf-8"))
+            buf = b""
+            while b"\n" not in buf:
+                chunk = client_sock.recv(65536)
+                if not chunk:
+                    raise ConnectionError()
+                buf += chunk
+            return buf.split(b"\n")[0].decode("utf-8").strip()
+        except Exception as e:
+            print(f"[bridge] client err: {e}", file=sys.stderr)
             try:
-                sock, addr = server.accept()
-                print(f"[bridge] Client {addr}", file=sys.stderr)
-                with self.lock:
-                    self.client_sock = sock
-                self.client_ready.set()
-            except Exception as e:
-                print(f"[bridge] Accept error: {e}", file=sys.stderr)
+                client_sock.close()
+            except Exception:
+                pass
+            client_sock = None
+            return None
 
-        threading.Thread(target=accept, daemon=True).start()
 
-    def send_to_client(self, state):
-        with self.lock:
-            if self.client_sock is None:
-                return None
-            try:
-                msg = json.dumps(state, ensure_ascii=False) + "\n"
-                self.client_sock.sendall(msg.encode("utf-8"))
-                buf = b""
-                while b"\n" not in buf:
-                    chunk = self.client_sock.recv(65536)
-                    if not chunk:
-                        raise ConnectionError()
-                    buf += chunk
-                return buf.split(b"\n")[0].decode("utf-8").strip()
-            except (ConnectionError, OSError) as e:
-                print(f"[bridge] Client gone: {e}", file=sys.stderr)
-                try:
-                    self.client_sock.close()
-                except Exception:
-                    pass
-                self.client_sock = None
-                self.client_ready.clear()
-                return None
+def main():
+    threading.Thread(target=accept_client, daemon=True).start()
+    print("ready", flush=True)
 
-    def _is_combat(self, state):
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            state = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
         cmds = state.get("available_commands", [])
-        return "end" in cmds or "play" in cmds or "choose" in cmds
+        in_combat = "play" in cmds or "end" in cmds or "choose" in cmds
 
-    def run(self):
-        self.start_server()
-        print("ready", flush=True)
-        for line in sys.stdin:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                state = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if self._is_combat(state):
-                self.client_ready.wait()
-                cmd = self.send_to_client(state)
-                if cmd is None:
-                    cmd = "state"  # wait, don't end turn
-            else:
-                cmd = "state"
-            print(cmd, flush=True)
-            _time.sleep(0.03)
+        if in_combat:
+            cmd = forward(state)
+        else:
+            # Forward non-combat state too, so env can control flow.
+            cmd = forward(state)
+        if cmd is None:
+            cmd = "state"
+        print(cmd, flush=True)
 
 
 if __name__ == "__main__":
     try:
-        p = argparse.ArgumentParser()
-        p.add_argument("--port", type=int, default=9339)
-        TCPBridge(port=p.parse_args().port).run()
+        main()
     except Exception:
         traceback.print_exc(file=sys.stderr)

@@ -4,6 +4,7 @@ Observation: 78-dim. Actions: 0-9 = play hand[n], 10 = end turn.
 """
 import socket
 import json
+import time
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
